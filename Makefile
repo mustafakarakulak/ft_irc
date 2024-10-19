@@ -1,47 +1,29 @@
-# Compiler and flags
-CXX := c++
-CXXFLAGS := -std=c++98 -Wall -Wextra -Werror #-fsanitize=address -g
+NAME = ircserv
 
-# Directories
-SRCDIR := srcs
-INCDIR := incs
-OBJDIR := objs
+SRCS = 	Channel/Channel.cpp Client/Client.cpp Server/Server.cpp \
+		main.cpp Commands/Nick.cpp Commands/Pass.cpp Commands/User.cpp \
+		Commands/Join.cpp Commands/Privmsg.cpp Commands/Who.cpp Commands/Kick.cpp \
+		Commands/Part.cpp Commands/Topic.cpp Commands/Quit.cpp Commands/Notice.cpp
 
-# Files
-SRCS := $(wildcard $(SRCDIR)/*.cpp)
-OBJS := $(patsubst $(SRCDIR)/%.cpp,$(OBJDIR)/%.o,$(SRCS))
+OBJS = $(SRCS:.cpp=.o)
+CXX_STANDARD = c++98
+CXX = c++
+CXXFLAGS = -g  -Wall -Wextra -Werror -std=$(CXX_STANDARD)
 
-# Targets
-TARGET := ircserv
+all: $(NAME)
 
-# Build rules
-$(OBJDIR):
-	@mkdir -p $(OBJDIR)
+$(NAME): $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $(NAME) $(OBJS)
 
-$(OBJDIR)/%.o: $(SRCDIR)/%.cpp | $(OBJDIR)
-	@echo "building..."
-	@$(CXX) $(CXXFLAGS) -I$(INCDIR) -c $< -o $@
-
-all: $(TARGET)
-$(TARGET): $(OBJS)
-	@echo "Removing files..."
-	@$(CXX) $(CXXFLAGS) $^ -o $@
-
+%.o: %.cpp
+	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 clean:
-	@rm -rf $(OBJDIR)
-	@echo "$(OBJDIR) folder removed"
+	rm -f $(OBJS) 
 
 fclean: clean
-	@rm -rf $(TARGET)
-	@echo "$(TARGET) removed"
+	rm -rf $(NAME) .vscode
 
 re: fclean all
 
-valgrind: re
-	valgrind --track-origins=yes --leak-check=full --show-leak-kinds=all ./ircserv 1025 pw
-
-run: re
-	./ircserv 1025 pw
-
-.PHONY: clean
+.PHONY: all clean fclean re
