@@ -6,7 +6,10 @@ void    Server::Join(int index, int id)
     int is_exist = 0;
 
 	if (commands[index + 1][0] != '#')
+    {
 		clients[id].print("JOIN: There is no # in the first character.\n");
+        return ;
+    }
 	for (size_t i = 0; i < channels.size(); i++)
 	{
 		if (channels[i].getChannelName() == commands[index + 1])

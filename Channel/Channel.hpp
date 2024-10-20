@@ -27,6 +27,7 @@ class Channel
 		void				addClient(Client client);
 		void				addAdmin(Client admin);
         void                setTopic(std::string new_topi);
+        void                removeAdmin(Client admin);
 
         ~Channel();
 

@@ -21,4 +21,17 @@ std::vector<Client> Channel::getChannelAdmins() { return channelAdmins; }
 
 void				Channel::addAdmin(Client admin) { channelAdmins.push_back(admin); }
 
+void Channel::removeAdmin(Client admin)
+{
+    std::vector<Client>::iterator it;
+    for (it = channelAdmins.begin(); it != channelAdmins.end(); ++it)
+    {
+        if (it->getNickName() == admin.getNickName())
+        {
+            channelAdmins.erase(it);
+            break;
+        }
+    }
+}
+
 Channel::~Channel() { }

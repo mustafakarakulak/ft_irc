@@ -93,6 +93,7 @@ void Server::executeCommand(int id)
 	tfun.push_back(&Server::Quit);
 	tfun.push_back(&Server::Topic);
 	tfun.push_back(&Server::Notice);
+	tfun.push_back(&Server::Mode);
 
 	cmds.push_back(USER);
 	cmds.push_back(NICK);
@@ -105,6 +106,7 @@ void Server::executeCommand(int id)
 	cmds.push_back(QUIT);
 	cmds.push_back(TOPIC);
 	cmds.push_back(NOTICE);
+	cmds.push_back(MODE);
 
 	for (size_t i = 0; i < cmds.size(); i++)
 	{
