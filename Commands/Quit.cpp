@@ -14,7 +14,6 @@ void    Server::Part2(int index, int id, Channel& channel, int flag)
 
 void Server::Quit(int index, int id)
 {
-	std::cout << "test" << std::endl;
 	for (size_t i = 0; i < channels.size(); i++)
 		if (isInChannel(channels[i].getClients(), clients[id].getNickName()) != -1)
 			Part2(index, id, channels[i], 0);
