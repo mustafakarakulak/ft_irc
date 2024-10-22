@@ -21,17 +21,38 @@ std::vector<Client> Channel::getChannelAdmins() { return channelAdmins; }
 
 void				Channel::addAdmin(Client admin) { channelAdmins.push_back(admin); }
 
-void Channel::removeAdmin(Client admin)
+void 				Channel::setChannelAdmins(std::vector<Client> channelAdmins) { this->channelAdmins = channelAdmins;}
+
+void Channel::removeAdmin(std::string nickname)
 {
-    std::vector<Client>::iterator it;
-    for (it = channelAdmins.begin(); it != channelAdmins.end(); ++it)
+    std::vector<Client> clientss = getChannelAdmins();
+
+    for(size_t i = 0; i< channelAdmins.size(); i++)
     {
-        if (it->getNickName() == admin.getNickName())
+        if (nickname == channelAdmins[i].getNickName())
         {
-            channelAdmins.erase(it);
-            break;
+            channelAdmins.erase(channelAdmins.begin() + i);
+            setChannelAdmins(channelAdmins); 
         }
     }
+}
+
+
+int Channel::isAdmin(std::string nickname)
+{
+    std::vector<Client> clientss = getChannelAdmins();
+
+    for(size_t i = 0; i< clientss.size(); i++)
+    {
+        std::cout << clientss[i].getNickName() << std::endl;
+        if (nickname == clientss[i].getNickName())
+        {
+        std::cout << clientss[i].getNickName() << std::endl;
+            return 1;
+        }
+
+    }
+    return 0;
 }
 
 Channel::~Channel() { }

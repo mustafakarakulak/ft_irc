@@ -21,14 +21,15 @@ class Channel
         std::string         getChannelName();
         std::string         getTopic();
 
+        int                 isAdmin(std::string nickname);
 		int					getChannelAdminSetted();
 
 		void				setClients(std::vector<Client> clients);
 		void				addClient(Client client);
 		void				addAdmin(Client admin);
         void                setTopic(std::string new_topi);
-        void                removeAdmin(Client admin);
-
+        void                removeAdmin(std::string nickname);
+        void 				setChannelAdmins(std::vector<Client> channelAdmins);
         ~Channel();
 
 };
