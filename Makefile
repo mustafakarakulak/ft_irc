@@ -46,3 +46,6 @@ clean:
 	$(RM) $(OBJ_DIR)
 
 fclean:
+	@echo "$(CYAN)[Cleaning]$(RESET) object files and program"
+	$(RM) $(OBJ_DIR)
+	$(RM) $(NAME)
