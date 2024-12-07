@@ -1,50 +1,84 @@
 #include "../Server/Server.hpp"
+#include "../Commands/ValidationUtils.hpp"
+#include "../Commands/NumericReplies.hpp"
 
-int	Server::isInChannel(std::vector<Client> c_clients, std::string name)
+void Server::Privmsg(size_t j, int id)
 {
-	for (size_t i = 0; i < c_clients.size(); i++)
-		if (strcmp(c_clients[i].getNickName().c_str(),name.c_str()) == 0)
-			return i;
-	return -1;
-}
+    if (!ValidationUtils::validateCommandFormat(commands, 3)) {
+        clients[id].print(ERR_NEEDMOREPARAMS(clients[id].getNickName(), "PRIVMSG"));
+        return;
+    }
 
-void    Server::Privmsg(int index, int id)
-{
-    std::string message = "";
-	size_t i;
-	(void)index;
-	if (commands.size() < 3)
-	{
-		std::cout << "You should use like this: PRIVMSG userName message";
-		clients[id].print("You should use like this: PRIVMSG userName message\n");
-	}
+    std::string target = commands[1];
+    if (target[0] == '#') {
+        if (!ValidationUtils::validateChannelName(target)) {
+            clients[id].print(ERR_NOSUCHCHANNEL(clients[id].getNickName(), target));
+            return;
+        }
 
-    for (i = 2; i < this->commands.size(); i++)
+        int channelIndex = getChannelIndex(target);
+        if (channelIndex == -1) {
+            clients[id].print(ERR_NOSUCHCHANNEL(clients[id].getNickName(), target));
+            return;
+        }
+
+        if (!ValidationUtils::validateUserInChannel(channels[channelIndex], clients[id].getNickName())) {
+            clients[id].print(ERR_CANNOTSENDTOCHAN(clients[id].getNickName(), target));
+            return;
+        }
+    }
+	(void) j;
+    if (commands.size() < 3)
+    {
+        clients[id].print("ERROR: Usage format is 'PRIVMSG <target> <message>'\n");
+        return;
+    }
+
+    std::string message;
+    for (size_t i = 2; i < commands.size(); i++)
     {
         message += commands[i];
         message += " ";
     }
 
-    for (i = 0; i < clients.size(); i++)
+    for (size_t i = 0; i < clients.size(); i++)
     {
-
-        if (strcmp(clients[i].getNickName().c_str(),commands[1].c_str()) == 0)
-		{
-			clients[i].print(":" + clients[id].getNickName() + "!" + clients[id].getUserName() + "@localhost"+ " PRIVMSG " + clients[i].getNickName() + " :"+ message + "\r\n");
-			return;
-		}
+        if (strcmp(clients[i].getNickName().c_str(), commands[1].c_str()) == 0)
+        {
+            clients[i].print(":" + clients[id].getNickName() + "!" + 
+                           clients[id].getUserName() + "@" + 
+                           clients[id].getIp() + " PRIVMSG " + 
+                           clients[i].getNickName() + " :" + 
+                           message + "\r\n");
+            return;
+        }
     }
-	for (size_t i = 0; i < channels.size(); i++)
-	{
-    	if (strcmp(commands[1].c_str(), channels[i].getChannelName().c_str()) == 0 && isInChannel(channels[i].getClients(), clients[id].getNickName()) != -1)
-    	{
-    	    std::vector<Client> tmp_client = channels[i].getClients();
-    	    for (size_t j = 0; j < tmp_client.size(); j++)
-			{
-    	        if (tmp_client[j].getNickName() != clients[id].getNickName())
-    	            tmp_client[j].print(":" + clients[id].getNickName() + "!" + clients[id].getUserName() + '@' + clients[id].getIp() + " PRIVMSG " + channels[i].getChannelName() + " :"+ message + "\r\n");
-			}
-			return;
-    	}
-	}
+
+    for (size_t i = 0; i < channels.size(); i++)
+    {
+        if (strcmp(commands[1].c_str(), channels[i].getChannelName().c_str()) == 0)
+        {
+            if (isInChannel(channels[i].getClients(), clients[id].getNickName()) == -1)
+            {
+                clients[id].print("ERROR: You are not in this channel\n");
+                return;
+            }
+
+            std::vector<Client> channelClients = channels[i].getClients();
+            for (size_t k = 0; k < channelClients.size(); k++)
+            {
+                if (channelClients[k].getNickName() != clients[id].getNickName())
+                {
+                    channelClients[k].print(":" + clients[id].getNickName() + "!" + 
+                                          clients[id].getUserName() + "@" + 
+                                          clients[id].getIp() + " PRIVMSG " + 
+                                          channels[i].getChannelName() + " :" + 
+                                          message + "\r\n");
+                }
+            }
+            return;
+        }
+    }
+    
+    clients[id].print("ERROR: Target not found\n");
 }

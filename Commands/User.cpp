@@ -1,13 +1,20 @@
 #include "../Server/Server.hpp"
+#include "../Commands/ValidationUtils.hpp"
+#include "../Commands/NumericReplies.hpp"
 
-// bir client disconnect attiginda bilgilerinin temizlenmesi lazim
-void Server::User(int index, int id)
-{
-	if (commands[index + 1].empty() == 0 && commands[index + 3].empty() == 0)
-	{
-        clients[id].setUserName(commands[index + 1]);
-        clients[id].setIp(commands[index + 3]);
-	}
-    else
-		clients[id].print("The format is 'USER username 0 realname\n");
+void Server::User(size_t j, int id) {
+    if (!ValidationUtils::validateCommandFormat(commands, 4)) {
+        clients[id].print(ERR_NEEDMOREPARAMS(clients[id].getNickName(), "USER"));
+        return;
+    }
+
+    if (clients[id].isRegistered()) {
+        clients[id].print(ERR_ALREADYREGISTERED(clients[id].getNickName()));
+        return;
+    }
+
+    clients[id].setUserName(commands[j + 1]);
+    clients[id].setIp(commands[j + 3]);
+    clients[id].setUserOK(true);
+    checkRegistration(id);
 }

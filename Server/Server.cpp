@@ -1,194 +1,238 @@
 #include "Server.hpp"
 
-std::vector<Channel> Server::getChannels() { return this->channels; }
-std::vector<Client> Server::getClients() { return this->clients; }
-std::vector<std::string> Server::getCommands() { return this->commands; }
-
-int Server::perr(std::string err, int sockfd)
-{
-	std::cout << err << std::endl;
-	close(sockfd);
-	exit(-1);
+Server::Server(int port, const std::string& pass) 
+    : port(port), pass(pass), serverName("ft_irc") {
+    initializeCommandMap();
+    initilizeServer();
+    runServer();
 }
 
-int	Server::getClientIndex2(std::string name, std::vector<Client> clients)
-{
-	for (size_t i = 0; i < clients.size(); i++)
-		if (strcmp(clients[i].getNickName().c_str(), name.c_str()) == 0)
-			return (i);
-	return (-1);	
+Server::~Server() {
+    close(sockfd);
+    for (size_t i = 0; i < clients.size(); ++i) {
+        close(clients[i].getSocket());
+    }
 }
 
-int	Server::getClientIndex(std::string name)
-{
-	for (size_t i = 0; i < clients.size(); i++)
-		if (strcmp(clients[i].getNickName().c_str(), name.c_str()) == 0)
-			return (i);
-	return (-1);	
+void Server::initializeCommandMap() {
+    commandMap[USER] = &Server::User;
+    commandMap[NICK] = &Server::Nick;
+    commandMap[PASS] = &Server::Pass;
+    commandMap[JOIN] = &Server::Join;
+    commandMap[PRIVMSG] = &Server::Privmsg;
+    commandMap[WHO] = &Server::Who;
+    commandMap[KICK] = &Server::Kick;
+    commandMap[PART] = &Server::Part;
+    commandMap[QUIT] = &Server::Quit;
+    commandMap[TOPIC] = &Server::Topic;
+    commandMap[NOTICE] = &Server::Notice;
+    commandMap[MODE] = &Server::Mode;
 }
 
-void Server::checkCommands(Server &server, std::string buffer, int socket)
-{
-	std::stringstream ss(buffer);
+void Server::initilizeServer() {
+    sockfd = socket(AF_INET, SOCK_STREAM, 0);
+    if (sockfd == SOCKET_ERROR)
+        perr("[ERROR] Failed to create socket", sockfd);
+    std::cout << "[INFO] Socket created successfully" << std::endl;
+
+    int opt = 1;
+    if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
+        perr("[ERROR] Failed to set socket options", sockfd);
+
+    setNonBlocking(sockfd);
+
+    server_address.sin_family = AF_INET;
+    server_address.sin_port = htons(port);
+    server_address.sin_addr.s_addr = INADDR_ANY;
+    
+    if (bind(sockfd, (struct sockaddr *)&server_address, sizeof(server_address)) < 0)
+        perr("[ERROR] Failed to bind socket", sockfd);
+    std::cout << "[INFO] Server bound to port " << port << std::endl;
+
+    if (listen(sockfd, 10) == SOCKET_ERROR)
+        perr("[ERROR] Failed to listen on socket", sockfd);
+    std::cout << "[INFO] IRC Server is listening for connections" << std::endl;
+}
+
+void Server::setNonBlocking(int fd) {
+    int flags = fcntl(fd, F_GETFL, 0);
+    if (flags == -1)
+        perr("[ERROR] Failed to get socket flags", fd);
+    if (fcntl(fd, F_SETFL, flags | O_NONBLOCK) == -1)
+        perr("[ERROR] Failed to set non-blocking mode", fd);
+}
+
+void Server::runServer() {
+    struct pollfd pfd;
+    pfd.fd = sockfd;
+    pfd.events = POLLIN;
+    pollfds.push_back(pfd);
+
+    while (true) {
+        int ready = poll(&pollfds[0], pollfds.size(), -1);
+        if (ready < 0) {
+            if (errno == EINTR) continue;
+            perror("[ERROR] Poll failed");
+            break;
+        }
+
+        if (pollfds[0].revents & POLLIN) {
+            handleNewConnection();
+        }
+
+        for (size_t i = 1; i < pollfds.size(); ++i) {
+            if (pollfds[i].revents & POLLIN) {
+                handleClientData(i);
+            }
+        }
+    }
+}
+
+void Server::handleNewConnection() {
+    int new_socket = accept(sockfd, NULL, NULL);
+    if (new_socket >= 0) {
+        setNonBlocking(new_socket);
+        
+        struct pollfd pfd;
+        pfd.fd = new_socket;
+        pfd.events = POLLIN;
+        pollfds.push_back(pfd);
+
+        Client newClient;
+        newClient.setSocket(new_socket);
+        clients.push_back(newClient);
+        
+        std::cout << "[INFO] New client connected. Total clients: " 
+                  << clients.size() << std::endl;
+    }
+}
+
+void Server::handleClientData(size_t clientIndex) {
+    char buffer[BUFFER_SIZE] = {0};
+    int valread = recv(pollfds[clientIndex].fd, buffer, BUFFER_SIZE - 1, 0);
+
+    if (valread > 0) {
+        buffer[valread] = '\0';
+        checkCommands(*this, buffer, pollfds[clientIndex].fd);
+        logCommand(buffer, clientIndex - 1);
+        processCommand(clientIndex - 1);
+    }
+    else if (valread == 0 || (valread < 0 && errno != EAGAIN)) {
+        handleClientDisconnect(clientIndex);
+    }
+}
+
+void Server::handleClientDisconnect(size_t index) {
+    int clientId = index - 1;
+    
+    // Socket'i kapat
+    close(pollfds[index].fd);
+    
+    // Quit mesajını gönder ve cleanup yap
+    if (clientId >= 0 && clientId < static_cast<int>(clients.size())) {
+        Quit(0, clientId);
+        clients.erase(clients.begin() + clientId);
+    }
+    
+    // Pollfd'den temizle
+    pollfds.erase(pollfds.begin() + index);
+    
+    std::cout << "[INFO] Client disconnected. Remaining clients: " 
+              << clients.size() << std::endl;
+}
+
+void Server::processCommand(int clientId) {
+    if (commands.empty()) return;
+
+    std::map<std::string, CommandFunction>::iterator it = commandMap.find(commands[0]);
+    if (it != commandMap.end()) {
+        if (clients[clientId].getLoggedIn() || 
+            commands[0] == PASS || 
+            commands[0] == USER || 
+            commands[0] == NICK) {
+            (this->*(it->second))(0, clientId);
+        } else {
+            clients[clientId].print("451 :You need to complete the registration\r\n");
+        }
+    }
+}
+
+std::vector<Channel> Server::getChannels() { return channels; }
+std::vector<Client> Server::getClients() { return clients; }
+std::vector<std::string> Server::getCommands() { return commands; }
+
+int Server::perr(const std::string& err, int sockfd) {
+    std::cout << err << std::endl;
+    close(sockfd);
+    exit(-1);
+}
+
+int Server::getClientIndex(const std::string& name) {
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (clients[i].getNickName() == name)
+            return i;
+    }
+    return -1;
+}
+
+int Server::getClientIndex2(const std::string& name, const std::vector<Client>& clients) {
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (clients[i].getNickName() == name)
+            return i;
+    }
+    return -1;
+}
+
+void Server::checkCommands(Server& server, const std::string& buffer, int socket) {
+    std::stringstream ss(buffer);
     (void)server;
-	(void)socket;
+    (void)socket;
     std::string line;
-    this->commands.clear();
+    commands.clear();
 
-    while(std::getline(ss, line))
-    {
+    while(std::getline(ss, line)) {
         std::size_t prev = 0, pos;
-        while ((pos = line.find_first_of(" :\r\n", prev)) != std::string::npos) // buraya ekstra olarak "#" eklendi
-        {
+        while ((pos = line.find_first_of(" :\r\n", prev)) != std::string::npos) {
             if (pos > prev)
-                this->commands.push_back(line.substr(prev, pos-prev));
+                commands.push_back(line.substr(prev, pos-prev));
             prev = pos+1;
         }
         if (prev < line.length())
-            this->commands.push_back(line.substr(prev, std::string::npos));
+            commands.push_back(line.substr(prev, std::string::npos));
     }
 }
 
-void Server::initilizeServer()
-{
-    server_address.sin_family = AF_INET; // IPv4
-    server_address.sin_port = htons(port);
-    server_address.sin_addr.s_addr = INADDR_ANY;
-	sockfd = socket(AF_INET, SOCK_STREAM, 0);
+void Server::logCommand(const std::string& command, int clientId) {
+    std::cout << "\033[1;34m[LOG]\033[0m Client " << clientId 
+              << " -> Command: " << command;
+}
 
-	if (sockfd == SOCKET_ERROR)
-		perr("socket KO", sockfd);
-
-	// baglantı koptugunda hızlıca tekrar kullanılabilmesine olanak sağlayan fonks.
-	int opt = 1;
-	if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) == -1)
-		perr("error setting socket option", sockfd);
-
-	if ((bind(sockfd, (struct sockaddr *)&server_address, sizeof(server_address))) < 0)
-    {
-		perror("bind KO");
-		exit(EXIT_FAILURE);
+int Server::isInChannel(const std::vector<Client>& clients, const std::string& nickname) {
+    for (size_t i = 0; i < clients.size(); i++) {
+        if (clients[i].getNickName() == nickname)
+            return i;
     }
-	else
-		std::cout << "bind OK" << std::endl;
-
-	listen(sockfd, 3) == SOCKET_ERROR ? perr("listen error listening on socket", sockfd) : printf("listen OK!\n");
-	FD_ZERO(&readfds);
-	FD_SET(sockfd, &readfds);
+    return -1;
 }
 
-void Server::executeCommand(int id)
-{
-	std::vector<std::string> cmds;
-	std::vector<fpoint> tfun;
-	
-	tfun.push_back(&Server::User);
-	tfun.push_back(&Server::Nick);
-	tfun.push_back(&Server::Pass);
-	tfun.push_back(&Server::Join);
-	tfun.push_back(&Server::Privmsg);
-	tfun.push_back(&Server::Who);
-	tfun.push_back(&Server::Kick);
-	tfun.push_back(&Server::Part);
-	tfun.push_back(&Server::Quit);
-	tfun.push_back(&Server::Topic);
-	tfun.push_back(&Server::Notice);
-	tfun.push_back(&Server::Mode);
-
-	cmds.push_back(USER);
-	cmds.push_back(NICK);
-	cmds.push_back(PASS);
-	cmds.push_back(JOIN);
-	cmds.push_back(PRIVMSG);
-	cmds.push_back(WHO);
-	cmds.push_back(KICK);
-	cmds.push_back(PART);
-	cmds.push_back(QUIT);
-	cmds.push_back(TOPIC);
-	cmds.push_back(NOTICE);
-	cmds.push_back(MODE);
-
-	for (size_t i = 0; i < cmds.size(); i++)
-	{
-		for (size_t j = 0; j < commands.size(); j++)
-		{
-			if ((cmds[i] == commands[j]) && (j+1 < commands.size()))
-			{
-				if (clients[id].getLoggedIn() || i < 3)
-					(this->*tfun[i])(j, id);
-				else
-				{
-					clients[id].print("you need to complete the registration. USER/NICK/PASS\r\n");
-					break;
-				}
-			}
-		}
-	}
+int Server::getChannelIndex(const std::string& channelName) {
+    for (size_t i = 0; i < channels.size(); i++) {
+        if (channels[i].getChannelName() == channelName)
+            return i;
+    }
+    return -1;
 }
 
-Server::Server(int port, std::string arg_pass)
-{
-	this->port = port;
-	this->pass = arg_pass;
-	initilizeServer();
-	int new_socket;
-	int max_sd = sockfd;
-	
-	while (1)
-	{
-		fd_set tmpfds = readfds;
-		select(max_sd + 1, &tmpfds, NULL, NULL, NULL);
+void Server::checkRegistration(int id) {
+    if (!clients[id].isRegistered()) {
+        clients[id].print("451 :You need to complete the registration. USER/NICK/PASS\r\n");
+        return;
+    }
 
-		if (FD_ISSET(sockfd, &tmpfds))
-		{
-			new_socket = accept(sockfd, NULL, NULL);
-			Client newC;
-			newC.setSocket(new_socket);
-			this->clients.push_back(newC);
-			if (new_socket < 0)
-				perr("accept error failed", sockfd);
-			else
-			{
-				std::cout << "accept connetion" << std::endl;
-				FD_SET(new_socket, &readfds);
-				if (new_socket > max_sd)
-					max_sd = new_socket;
-				connected_clients.push_back(new_socket);
-			}
-		}
-		
-		char buffer[1024] = {0};
-		for (size_t i = 0; i < connected_clients.size(); i++)
-		{
-			if (FD_ISSET(connected_clients[i], &tmpfds))
-			{
-				int valread = recv(connected_clients[i], buffer, sizeof(buffer), 0);
-                checkCommands(*this, buffer, connected_clients[i]);
-				executeCommand(i);
-                if (clients[i].getPass() != "" && clients[i].getNickName() != "" &&
-                    clients[i].getUserName() != "" && clients[i].getLoggedIn() == 0)
-                {
-                    clients[i].setLoggedIn(1);
-                    std::cout << "Successfully logged into the system!!" << std::endl;
-					clients[i].print(":" + clients[i].getIp() + " 001 " + clients[i].getNickName() + " :Welcome to the Internet Relay Network " \
-						+ clients[i].getNickName() + "!" + clients[i].getUserName() + "@" + clients[i].getIp() + "\r\n");
-                }
-				if (valread > 0)
-				{
-					// add send message to other clients
-					std::cout << "message from " << i << ": " <<  buffer << std::endl;
-					memset(buffer, 0, sizeof(buffer));
-				}
-				else if (valread == 0)
-				{
-					std::cout << "client disconnected" << i << std::endl;
-					Quit(0, i);
-					--i;
-				}
-			}
-		}
-	};
+    if (!clients[id].getLoggedIn()) {
+        clients[id].setLoggedIn(true);
+        clients[id].print("001 " + clients[id].getNickName() + " :Welcome to the IRC Network\r\n");
+        std::cout << "[INFO] Client " << id << " (" << clients[id].getNickName() 
+                  << ") completed registration" << std::endl;
+    }
 }
-
-
-Server::~Server() { }

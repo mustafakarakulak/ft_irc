@@ -1,27 +1,37 @@
 #include "../Server/Server.hpp"
 
-void    Server::Part2(int index, int id, Channel& channel, int flag)
+void Server::Quit(size_t j, int id)
 {
-	(void)flag;
-	(void)index;
-	std::vector<Client> c_clients = channel.getClients();   
-	for (size_t i = 0; i < c_clients.size(); i++)
-		c_clients[i].print(":" + clients[id].getNickName() + "!" + clients[id].getUserName() + '@' + clients[id].getIp() + " PART " + channel.getChannelName() + "\r\n");
+    (void)j;
+    std::string quitMessage = ":" + clients[id].getNickName() + "!" + 
+                            clients[id].getUserName() + "@" + 
+                            clients[id].getIp() + " QUIT :Leaving\r\n";
 
-	c_clients.erase(c_clients.begin()+isInChannel(channel.getClients(), clients[id].getNickName()));
-	channel.setClients(c_clients);
-}
-
-void Server::Quit(int index, int id)
-{
-	for (size_t i = 0; i < channels.size(); i++)
-		if (isInChannel(channels[i].getClients(), clients[id].getNickName()) != -1)
-			Part2(index, id, channels[i], 0);
-	close(clients[id].getSocket());
-	clients.erase(clients.begin()+id);
-	close(connected_clients[id]);
-	connected_clients.erase(connected_clients.begin()+id);
-
-	for (size_t i = 0; i < clients.size(); i++)
-		std::cout << clients[i].getUserName() << std::endl;
+    // Tüm kanallardaki işlemler
+    for (std::vector<Channel>::iterator it = channels.begin(); it != channels.end();) {
+        int clientIndex = isInChannel(it->getClients(), clients[id].getNickName());
+        if (clientIndex != -1) {
+            std::vector<Client> channelClients = it->getClients();
+            for (size_t k = 0; k < channelClients.size(); k++) {
+                if (channelClients[k].getNickName() != clients[id].getNickName()) {
+                    channelClients[k].print(quitMessage);
+                }
+            }
+            
+            channelClients.erase(channelClients.begin() + clientIndex);
+            it->setClients(channelClients);
+            
+            if (channelClients.empty()) {
+                it = channels.erase(it);
+                continue;
+            }
+        }
+        ++it;
+    }
+    
+    clients[id].setLoggedIn(false);
+    clients[id].setRegistered(false);
+    clients[id].setNickOK(false);
+    clients[id].setUserOK(false);
+    clients[id].setPassOK(false);
 }

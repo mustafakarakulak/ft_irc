@@ -1,34 +1,43 @@
 #include "../Server/Server.hpp"
 
-void    Server::Topic(int index, int id)
+void Server::Topic(size_t j, int id)
 {
-    int is_exist = 0;
-
-    if (commands[index + 1][0] != '#')
-		clients[id].print("TOPIC: There is no # in the first character.\n");
-
-    for (size_t j = 0; j < channels.size(); j++)
+    if (commands.size() < 2)
     {
-        if (commands[index + 1] == channels[j].getChannelName())
-        {
-			if (isInChannel(channels[j].getChannelAdmins(), clients[id].getNickName()) == -1)
-			{
-				clients[id].print("TOPIC: You are not a admin for " + channels[j].getChannelName() + ".\n");
-				return;
-			}
-            if (commands[index + 1] == channels[j].getChannelName() && isInChannel(channels[j].getClients(), clients[id].getNickName()) != -1)
-            {
-                is_exist = 1;
-                for (size_t k = 0; k < channels[j].getClients().size(); k++)
-                {
-                    if (commands.size() > 2)
-                        channels[j].getClients()[k].print("TOPIC " + commands[index + 1] + " :" + commands[index + 2] + "\r\n");
-                    else
-                        clients[id].print("TOPIC: Enter topic name.\n");
-                }
-            } 
-        }
+        clients[id].print("ERROR: Usage format is 'TOPIC #channelName [topic]'\n");
+        return;
     }
-    if (is_exist == 0)
-        clients[id].print("TOPIC: Channel not found.\n");
+
+    if (commands[j + 1][0] != '#')
+    {
+        clients[id].print("ERROR: Channel name must start with #\n");
+        return;
+    }
+
+    int channelIndex = getChannelIndex(commands[j + 1]);
+    if (channelIndex == -1)
+    {
+        clients[id].print("ERROR: Channel not found\n");
+        return;
+    }
+
+    Channel& channel = channels[channelIndex];
+    if (isInChannel(channel.getChannelAdmins(), clients[id].getNickName()) == -1)
+    {
+        clients[id].print("ERROR: You are not an admin in " + channel.getChannelName() + "\n");
+        return;
+    }
+
+    if (commands.size() < 3)
+    {
+        clients[id].print("ERROR: Please provide a topic\n");
+        return;
+    }
+
+    std::string topicMessage = commands[j + 2];
+    std::vector<Client> channelClients = channel.getClients();
+    for (size_t i = 0; i < channelClients.size(); i++)
+    {
+        channelClients[i].print("TOPIC " + channel.getChannelName() + " :" + topicMessage + "\r\n");
+    }
 }

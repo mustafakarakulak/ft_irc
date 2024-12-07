@@ -1,84 +1,95 @@
-#pragma once
+#ifndef SERVER_HPP
+#define SERVER_HPP
 
-#include "../Channel/Channel.hpp"
-#include "../Client/Client.hpp"
 #include <vector>
+#include <string>
+#include <map>
 #include <iostream>
-#include <string.h>
-#include <sys/socket.h>
-#include <fstream>
-#include <ctime>
-#include <unistd.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
 #include <sstream>
-#include <string.h>
+#include <cstring>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <unistd.h>
+#include <errno.h>
+#include "../Client/Client.hpp"
+#include "../Channel/Channel.hpp"
 
-# define SOCKET_ERROR 	-1
-# define PASS			"PASS"
-# define JOIN			"JOIN"
-# define USER			"USER"
-# define WHO			"WHO"
-# define QUIT			"QUIT"
-# define PART			"PART"
-# define TOPIC			"TOPIC"
-# define LIST			"LIST"
-# define NICK			"NICK"
-# define PRIVMSG		"PRIVMSG"
-# define KICK			"KICK"
-# define NOTICE 		"NOTICE"
-# define MODE			"MODE"
+#define SOCKET_ERROR -1
+#define BUFFER_SIZE 1024
 
-class Server
-{
-    private:
-	    struct sockaddr_in			server_address;
-		typedef void(Server::*fpoint)(int, int);
-        std::vector<Channel>		channels;
-        std::vector<Client>			clients;
-        std::vector<std::string>	commands;
-		std::vector<int>			connected_clients;
+// Komut tanımlamaları
+#define PASS "PASS"
+#define NICK "NICK"
+#define USER "USER"
+#define JOIN "JOIN"
+#define PRIVMSG "PRIVMSG"
+#define WHO "WHO"
+#define KICK "KICK"
+#define PART "PART"
+#define QUIT "QUIT"
+#define TOPIC "TOPIC"
+#define NOTICE "NOTICE"
+#define MODE "MODE"
 
-		int							sockfd;
-		int							acceptFd;
-		int 						port;
-		std::string					serverIp;
-		std::string					pass;
-		fd_set 						readfds;
+class Server {
+private:
+    typedef void (Server::*CommandFunction)(size_t, int);
+    std::map<std::string, CommandFunction> commandMap;
 
-    public:
-		Server(int port, std::string arg_pass);
-		std::vector<Channel> 		getChannels();
-		std::vector<std::string>	getCommands();
-		std::vector<Client> 		getClients();
+    int sockfd;
+    int port;
+    std::string pass;
+    struct sockaddr_in server_address;
+    std::vector<Channel> channels;
+    std::vector<Client> clients;
+    std::vector<struct pollfd> pollfds;
+    std::vector<std::string> commands;
+    std::string serverName;
 
-		void    					Part(int index, int id);
-		void    					Topic(int index, int id);
-		void    					Quit(int index, int id);
-		void						executeCommand(int clientsockt);
-		void						User(int index, int id);
-		void						Pass(int index, int id);
-		void						Nick(int index, int id);
-		void						Join(int index, int id);
-		void						Mode(int index, int id);
-		void						Who(int index, int id);
-		void						List(int index, int id);
-		void						Kick(int index, int id);
-		void						Notice(int index, int id);
-		void 						excWho(int id);
-		void						Privmsg(int index, int id);
-		void    					Part2(int index, int id, Channel& channel, int flag);
-		void						Quit2();
+    void initializeCommandMap();
+    void initilizeServer();
+    void runServer();
+    void handleNewConnection();
+    void handleClientData(size_t clientIndex);
+    void handleClientDisconnect(size_t index);
+    void setNonBlocking(int fd);
+    void processCommand(int clientId);
 
-		int							isInChannel(std::vector<Client> c_clients, std::string name);
-		int							getChannelIndex(std::string name);
-		int							getClientIndex(std::string name);
-		int							getClientIndex2(std::string name, std::vector<Client> clients);
-		int							getServerFd();
-		int							getAcceptFd();
-		int							getPort();
-		void						initilizeServer();
-		int 						perr(std::string err, int sockfd);
-		void						checkCommands(Server &server, std::string buffer, int socket);
-		~Server();
+public:
+    Server(int port, const std::string& pass);
+    ~Server();
+
+    // Getter metodları
+    std::vector<Channel> getChannels();
+    std::vector<Client> getClients();
+    std::vector<std::string> getCommands();
+    std::string getServerName() const { return serverName; };
+
+    // Yardımcı metodlar
+    int perr(const std::string& err, int sockfd);
+    int getClientIndex(const std::string& name);
+    int getClientIndex2(const std::string& name, const std::vector<Client>& clients);
+    void checkCommands(Server& server, const std::string& buffer, int socket);
+    int isInChannel(const std::vector<Client>& clients, const std::string& nickname);
+    int getChannelIndex(const std::string& channelName);
+    void logCommand(const std::string& command, int clientId);
+    void checkRegistration(int id);
+
+    // Komut işleme metodları
+    void User(size_t j, int id);
+    void Nick(size_t j, int id);
+    void Pass(size_t j, int id);
+    void Join(size_t j, int id);
+    void Privmsg(size_t j, int id);
+    void Who(size_t j, int id);
+    void Kick(size_t j, int id);
+    void Part(size_t j, int id);
+    void Quit(size_t j, int id);
+    void Topic(size_t j, int id);
+    void Notice(size_t j, int id);
+    void Mode(size_t j, int id);
 };
+
+#endif

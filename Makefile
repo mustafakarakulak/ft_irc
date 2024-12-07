@@ -16,7 +16,8 @@ SRCS := \
 	Commands/Topic.cpp \
 	Commands/Quit.cpp \
 	Commands/Notice.cpp \
-	Commands/Mode.cpp
+	Commands/Mode.cpp \
+	Commands/ValidationUtils.cpp
 
 OBJ_DIR := obj
 OBJS := $(addprefix $(OBJ_DIR)/, $(SRCS:.cpp=.o))
@@ -49,3 +50,6 @@ fclean:
 	@echo "$(CYAN)[Cleaning]$(RESET) object files and program"
 	$(RM) $(OBJ_DIR)
 	$(RM) $(NAME)
+
+re: fclean all
+	@echo "$(CYAN)[Rebuilt]$(RESET) project"
