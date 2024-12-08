@@ -1,37 +1,37 @@
 #include "../Server/Server.hpp"
 
-void Server::Quit(size_t j, int id)
-{
+void Server::Quit(size_t j, int id) {
     (void)j;
     std::string quitMessage = ":" + clients[id].getNickName() + "!" + 
-                            clients[id].getUserName() + "@" + 
-                            clients[id].getIp() + " QUIT :Leaving\r\n";
+                             clients[id].getUserName() + "@" + 
+                             clients[id].getIp() + " QUIT :Leaving\r\n";
 
-    // Tüm kanallardaki işlemler
+    // Tüm kanallara quit mesajını gönder
     for (std::vector<Channel>::iterator it = channels.begin(); it != channels.end();) {
-        int clientIndex = isInChannel(it->getClients(), clients[id].getNickName());
+        std::vector<Client> channelClients = it->getClients();
+        int clientIndex = isInChannel(channelClients, clients[id].getNickName());
+        
         if (clientIndex != -1) {
-            std::vector<Client> channelClients = it->getClients();
+            // Quit mesajını kanaldaki diğer kullanıcılara gönder
             for (size_t k = 0; k < channelClients.size(); k++) {
                 if (channelClients[k].getNickName() != clients[id].getNickName()) {
                     channelClients[k].print(quitMessage);
                 }
             }
             
-            channelClients.erase(channelClients.begin() + clientIndex);
-            it->setClients(channelClients);
+            // Kullanıcıyı kanaldan çıkar
+            it->removeClient(clients[id].getNickName());
             
-            if (channelClients.empty()) {
+            // Kanal boşsa kanalı sil
+            if (it->getClients().empty()) {
                 it = channels.erase(it);
                 continue;
             }
         }
         ++it;
     }
-    
-    clients[id].setLoggedIn(false);
-    clients[id].setRegistered(false);
-    clients[id].setNickOK(false);
-    clients[id].setUserOK(false);
-    clients[id].setPassOK(false);
+
+    // Client'a quit mesajını gönder ve bağlantıyı kapat
+    clients[id].print(quitMessage);
+    close(clients[id].getSocket());
 }

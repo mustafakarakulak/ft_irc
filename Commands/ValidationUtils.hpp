@@ -23,6 +23,10 @@ public:
     static bool validatePassword(const std::string& inputPass, const std::string& serverPass);
     static bool validateRegistration(const Client& client);
 
+    static bool canModifyOperatorStatus(const Channel& channel, 
+                                  const std::string& sourceNick, 
+                                  const std::string& targetNick);
+
 private:
     ValidationUtils();
 };

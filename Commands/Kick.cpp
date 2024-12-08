@@ -12,6 +12,7 @@ void Server::Kick(size_t j, int id)
     }
 
     std::string channelName = commands[1];
+    std::string targetNick = commands[2];
     if (!ValidationUtils::validateChannelName(channelName)) {
         clients[id].print(ERR_NOSUCHCHANNEL(clients[id].getNickName(), channelName));
         return;
@@ -25,6 +26,23 @@ void Server::Kick(size_t j, int id)
 
     if (!ValidationUtils::validateAdminPrivileges(channels[channelIndex], clients[id].getNickName())) {
         clients[id].print(ERR_CHANOPRIVSNEEDED(clients[id].getNickName(), channelName));
+        return;
+    }
+
+    Channel* channel = &channels[channelIndex];
+
+    if (!channel->isAdmin(clients[id].getNickName())) {
+        clients[id].print(ERR_CHANOPRIVSNEEDED(clients[id].getNickName(), channelName));
+        return;
+    }
+
+    if (!ValidationUtils::validateUserInChannel(*channel, targetNick)) {
+        clients[id].print(ERR_USERNOTINCHANNEL(clients[id].getNickName(), targetNick, channelName));
+        return;
+    }
+
+    if (channel->isAdmin(targetNick)) {
+        clients[id].print(ERR_CANNOTKICKOP(clients[id].getNickName(), channelName));
         return;
     }
 

@@ -56,6 +56,7 @@ private:
     void handleClientDisconnect(size_t index);
     void setNonBlocking(int fd);
     void processCommand(int clientId);
+    void broadcastToChannel(const Channel& channel, const std::string& message);
 
 public:
     Server(int port, const std::string& pass);

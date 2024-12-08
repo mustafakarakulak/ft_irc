@@ -44,3 +44,12 @@ bool ValidationUtils::validateUserExists(const std::vector<Client>& clients, con
     }
     return false;
 }
+
+bool ValidationUtils::canModifyOperatorStatus(const Channel& channel, 
+                                            const std::string& sourceNick, 
+                                            const std::string& targetNick) {
+    if (sourceNick == targetNick) return false;
+    if (!channel.isAdmin(sourceNick)) return false;
+    if (channel.isAdmin(targetNick)) return false;
+    return true;
+}

@@ -27,46 +27,28 @@ void Server::Part(size_t j, int id)
     }
 
     std::string message;
-    for (size_t i = 2; i < commands.size(); i++)
-    {
+    for (size_t i = 2; i < commands.size(); i++) {
         message += commands[i];
         message += " ";
     }
 
-    bool channelFound = false;
-    for (size_t i = 0; i < channels.size(); i++)
-    {
-        if (commands[j + 1] == channels[i].getChannelName())
-        {
-            if (isInChannel(channels[i].getClients(), clients[id].getNickName()) == -1)
-            {
-                clients[id].print("ERROR: You are not in this channel\n");
-                return;
-            }
+    std::string partMessage = ":" + clients[id].getNickName() + "!" + 
+                            clients[id].getUserName() + "@" + 
+                            clients[id].getIp() + " PART " + 
+                            channelName + " :" + 
+                            message + "\r\n";
 
-            channelFound = true;
-            std::vector<Client> channelClients = channels[i].getClients();
-            
-            std::string partMessage = ":" + clients[id].getNickName() + "!" + 
-                                    clients[id].getUserName() + "@" + 
-                                    clients[id].getIp() + " PART " + 
-                                    commands[j + 1] + " :" + 
-                                    message + "\r\n";
-
-            for (size_t k = 0; k < channelClients.size(); k++)
-            {
-                channelClients[k].print(partMessage);
-            }
-
-            channelClients.erase(channelClients.begin() + 
-                               getClientIndex2(clients[id].getNickName(), channelClients));
-            channels[i].setClients(channelClients);
-            break;
-        }
+    // Kanaldaki tüm kullanıcılara mesaj gönder
+    std::vector<Client> channelClients = channels[channelIndex].getClients();
+    for (size_t k = 0; k < channelClients.size(); k++) {
+        channelClients[k].print(partMessage);
     }
 
-    if (!channelFound)
-    {
-        clients[id].print("ERROR: Channel not found\n");
-    }
+    // Kullanıcıyı kanaldan çıkar
+    channelClients.erase(channelClients.begin() + 
+                        getClientIndex2(clients[id].getNickName(), channelClients));
+    channels[channelIndex].setClients(channelClients);
+    
+    // Kullanıcının joinedChannels listesinden kanalı kaldır
+    clients[id].removeChannel(channelName);
 }

@@ -17,5 +17,8 @@
 #define ERR_CHANOPRIVSNEEDED(client, channel) ("482 " + client + " " + channel + " :You're not channel operator")
 
 #define RPL_CHANNELMODEIS(nick, channel, modes) ("324 " + nick + " " + channel + " " + modes + "\r\n")
-
+#define ERR_USERNOTINCHANNEL(source, target, channel) \
+    ":" + serverName + " 441 " + source + " " + target + " " + channel + " :They aren't on that channel\r\n"
+#define ERR_CANNOTKICKOP(source, channel) \
+    ":" + serverName + " 485 " + source + " " + channel + " :Cannot kick another channel operator\r\n"
 #endif

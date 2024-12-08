@@ -4,7 +4,6 @@
 
 void Server::Mode(size_t j, int id)
 {
-    // En az 2 parametre gerekli (kanal adı ve mod)
     if (!ValidationUtils::validateCommandFormat(commands, 2)) {
         clients[id].print(ERR_NEEDMOREPARAMS(clients[id].getNickName(), "MODE"));
         return;
@@ -28,7 +27,6 @@ void Server::Mode(size_t j, int id)
     if (commands.size() == 3) {
         std::string mode = commands[j + 2];
         if (mode == "b") {
-            // Ban listesi boş olduğu için direkt end mesajı
             clients[id].print(":" + serverName + " 368 " + clients[id].getNickName() + 
                             " " + channelName + " :End of channel ban list\r\n");
             return;
@@ -51,9 +49,24 @@ void Server::Mode(size_t j, int id)
             return;
         }
 
+        // Hedef kullanıcı kanalda mı kontrol et
+        if (!ValidationUtils::validateUserInChannel(*channel, targetNick)) {
+            clients[id].print(ERR_USERNOTINCHANNEL(clients[id].getNickName(), targetNick, channelName));
+            return;
+        }
+
         if (mode == "+o") {
-            if (channel->isAdmin(clients[targetIndex].getNickName())) {
-                clients[id].print(ERR_USERONCHANNEL(clients[id].getNickName(), targetNick, channelName));
+            // Kendine op verme kontrolü
+            if (targetNick == clients[id].getNickName()) {
+                clients[id].print(":" + serverName + " 481 " + clients[id].getNickName() + 
+                                " :Cannot give operator status to yourself\r\n");
+                return;
+            }
+
+            // Zaten operator mı kontrolü
+            if (channel->isAdmin(targetNick)) {
+                clients[id].print(":" + serverName + " 482 " + clients[id].getNickName() + 
+                                " " + channelName + " :User already has operator status\r\n");
                 return;
             }
 
@@ -67,19 +80,28 @@ void Server::Mode(size_t j, int id)
             }
         }
         else if (mode == "-o") {
-            if (!channel->isAdmin(clients[targetIndex].getNickName())) {
-                clients[id].print(ERR_NOTONCHANNEL(clients[id].getNickName(), channelName));
+            // Kendini deop yapma kontrolü
+            if (targetNick == clients[id].getNickName()) {
+                clients[id].print(":" + serverName + " 481 " + clients[id].getNickName() + 
+                                " :Cannot remove your own operator status\r\n");
                 return;
             }
 
-            if (channel->isAdmin(clients[targetIndex].getNickName()) && 
-                clients[id].getNickName() != targetNick) {
-                clients[id].print("482 " + clients[id].getNickName() + " " + channelName + 
-                                " :Cannot deop another operator\r\n");
+            // Hedef operator değilse hata ver
+            if (!channel->isAdmin(targetNick)) {
+                clients[id].print(":" + serverName + " 482 " + clients[id].getNickName() + 
+                                " " + channelName + " :User is not an operator\r\n");
                 return;
             }
 
-            channel->removeAdmin(clients[targetIndex].getNickName());
+            // Başka bir operatörü deop yapma kontrolü
+            if (channel->isAdmin(targetNick) && clients[id].getNickName() != targetNick) {
+                clients[id].print(":" + serverName + " 482 " + clients[id].getNickName() + 
+                                " " + channelName + " :Cannot remove operator status from another operator\r\n");
+                return;
+            }
+
+            channel->removeAdmin(targetNick);
             std::string modeMessage = ":" + clients[id].getNickName() + " MODE " + 
                                     channel->getChannelName() + " -o " + targetNick + "\r\n";
             

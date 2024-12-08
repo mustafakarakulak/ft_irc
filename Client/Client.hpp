@@ -23,12 +23,13 @@ private:
 
 public:
     Client();
-    bool isRegistered() { return passOK && nickOK && userOK; }
     void setPassOK(bool status) { passOK = status; }
     void setNickOK(bool status) { nickOK = status; }
     void setUserOK(bool status) { userOK = status; }
     void setRegistered(bool status) { registered = status; }
-    bool isRegistered() const { return registered; }
+    bool isRegistered() const {
+    return passOK && nickOK && userOK;
+}
     ~Client();
 
     // Getters
@@ -54,6 +55,7 @@ public:
     void joinChannel(const std::string& channelName);
     void leaveChannel(const std::string& channelName);
     bool isInChannel(const std::string& channelName) const;
+    void removeChannel(const std::string& channelName);
 
     // Communication
     void print(const std::string& str) const;

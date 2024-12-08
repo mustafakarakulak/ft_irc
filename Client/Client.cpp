@@ -64,3 +64,8 @@ void Client::print(const std::string& str) const {
         total += sent;
     }
 }
+
+void Client::removeChannel(const std::string& channelName) {
+    joinedChannels.erase(std::remove(joinedChannels.begin(), joinedChannels.end(), channelName), 
+                        joinedChannels.end());
+}

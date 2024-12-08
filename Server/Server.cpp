@@ -12,6 +12,9 @@ Server::~Server() {
     for (size_t i = 0; i < clients.size(); ++i) {
         close(clients[i].getSocket());
     }
+    channels.clear();
+    clients.clear();
+    std::cout << "[INFO] Server destroyed" << std::endl;
 }
 
 void Server::initializeCommandMap() {
@@ -111,6 +114,10 @@ void Server::handleClientData(size_t clientIndex) {
     char buffer[BUFFER_SIZE] = {0};
     int valread = recv(pollfds[clientIndex].fd, buffer, BUFFER_SIZE - 1, 0);
 
+    if (valread >= BUFFER_SIZE) {
+        handleClientDisconnect(clientIndex);
+        return;
+    }
     if (valread > 0) {
         buffer[valread] = '\0';
         checkCommands(*this, buffer, pollfds[clientIndex].fd);
@@ -146,12 +153,17 @@ void Server::processCommand(int clientId) {
 
     std::map<std::string, CommandFunction>::iterator it = commandMap.find(commands[0]);
     if (it != commandMap.end()) {
-        if (clients[clientId].getLoggedIn() || 
-            commands[0] == PASS || 
-            commands[0] == USER || 
-            commands[0] == NICK) {
+        // PASS, NICK ve USER komutlarını her zaman kabul et
+        if (commands[0] == PASS || commands[0] == USER || commands[0] == NICK) {
             (this->*(it->second))(0, clientId);
-        } else {
+            // Her komuttan sonra kayıt durumunu kontrol et
+            checkRegistration(clientId);
+        }
+        // Diğer komutlar için login kontrolü yap
+        else if (clients[clientId].getLoggedIn()) {
+            (this->*(it->second))(0, clientId);
+        }
+        else {
             clients[clientId].print("451 :You need to complete the registration\r\n");
         }
     }
@@ -224,15 +236,29 @@ int Server::getChannelIndex(const std::string& channelName) {
 }
 
 void Server::checkRegistration(int id) {
-    if (!clients[id].isRegistered()) {
-        clients[id].print("451 :You need to complete the registration. USER/NICK/PASS\r\n");
-        return;
-    }
-
-    if (!clients[id].getLoggedIn()) {
+    if (clients[id].isRegistered() && !clients[id].getLoggedIn()) {
+        std::string nick = clients[id].getNickName();
         clients[id].setLoggedIn(true);
-        clients[id].print("001 " + clients[id].getNickName() + " :Welcome to the IRC Network\r\n");
-        std::cout << "[INFO] Client " << id << " (" << clients[id].getNickName() 
+        clients[id].setRegistered(true);
+        
+        clients[id].print("001 " + nick + " :Welcome to the IRC Network, " + nick + "\r\n");
+        clients[id].print("002 " + nick + " :Your host is " + serverName + ", running version 1.0\r\n");
+        clients[id].print("003 " + nick + " :This server was created today\r\n");
+        clients[id].print("004 " + nick + " " + serverName + " 1.0 o o\r\n");
+        clients[id].print("375 " + nick + " :- " + serverName + " Message of the day -\r\n");
+        clients[id].print("376 " + nick + " :End of /MOTD command\r\n");
+
+        std::cout << "[INFO] Client " << id << " (" << nick 
                   << ") completed registration" << std::endl;
+    }
+}
+
+void Server::broadcastToChannel(const Channel& channel, const std::string& message) {
+    const std::vector<Client>& channelClients = channel.getClients();
+    for (size_t i = 0; i < channelClients.size(); i++) {
+        int clientId = getClientIndex(channelClients[i].getNickName());
+        if (clientId != -1) {
+            clients[clientId].print(message);
+        }
     }
 }
